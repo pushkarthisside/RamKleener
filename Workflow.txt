@@ -1,0 +1,6 @@
+Workflow
+
+1. Created GitHub repo + initialised
+2. Made gemini and chatgpt for their context.
+3. i got the code from Claude and i gave it to gemini.
+4. Add those 3 lines to $SAFE_TO_KILL in your RamKleener.ps1
