@@ -18,6 +18,7 @@ $NEVER_KILL_DEFAULT = @(
 )
 
 # --- TIER 3: SAFE TO KILL ---
+
 $SAFE_TO_KILL = @(
     "chrome", "msedge", "msedgewebview2", "browser_broker",
     "googleupdate", "googlecrashhandler", "googlecrashhandler64",
@@ -29,14 +30,16 @@ $SAFE_TO_KILL = @(
     "msteams", "ms-teams", "cefsharp.browsersubprocess", "widgets"
 )
 
+$thresholdMB = 50
+
 # ============================================================
 #  STEP 2: RAM STATS + VISUAL BAR
 # ============================================================
 
 function Get-RAMStats {
     $os    = Get-CimInstance Win32_OperatingSystem
-    $total = [math]::Round($os.TotalVisibleMemorySize / 1GB, 2)
-    $free  = [math]::Round($os.FreePhysicalMemory / 1GB, 2)
+    $total = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
+    $free  = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
     $used  = [math]::Round($total - $free, 2)
     $pct   = [math]::Round(($used / $total) * 100, 0)
     return @{ Total=$total; Free=$free; Used=$used; Pct=$pct }
@@ -73,13 +76,13 @@ function Show-RAMStats {
 Show-RAMStats
 
 function Get-BloatProcesses {
-    $running = Get-Process -ErrorAction SilentlyContinue
-    $found   = New-Object System.Collections.Generic.List[PSCustomObject] # Faster than +=
-    $currentPid = $PID # Don't scan this script!
+    $running    = Get-Process -ErrorAction SilentlyContinue
+    $found      = New-Object System.Collections.Generic.List[PSCustomObject]
+    $currentPid = $PID
 
     foreach ($proc in $running) {
         try {
-            $name = $proc.Name
+            $name = $proc.Name.ToLower()   # FIX 1: lowercase normalization restored
             $id   = $proc.Id
 
             if ($id -eq $currentPid) { continue }
@@ -88,6 +91,7 @@ function Get-BloatProcesses {
 
             if ($SAFE_TO_KILL -contains $name) {
                 $memMB = [math]::Round($proc.WorkingSet64 / 1MB, 1)
+                if ($memMB -lt $thresholdMB) { continue }   # FIX 2: threshold restored
                 $found.Add([PSCustomObject]@{
                     Name  = $name
                     PID   = $id
@@ -95,10 +99,72 @@ function Get-BloatProcesses {
                 })
             }
         } catch {
-            # Process likely closed during scan, just skip it
             continue
         }
     }
 
     return $found | Sort-Object MemMB -Descending
 }
+
+# ============================================================
+#  STEP 4: DISPLAY BLOAT TABLE
+# ============================================================
+
+function Show-BloatTable {
+    param(
+        [System.Collections.Generic.List[PSCustomObject]]$Processes
+    )
+
+    Write-Host ""
+    Write-Host "  +-- BLOAT PROCESSES ---------------------------------+" -ForegroundColor DarkCyan
+
+    if ($Processes.Count -eq 0) {
+        Write-Host "  No bloat processes found above threshold." -ForegroundColor Green
+        Write-Host "  +---------------------------------------------------+" -ForegroundColor DarkCyan
+        Write-Host ""
+        return
+    }
+
+    # --- GROUP by process name, sum memory, count instances ---
+    $grouped = $Processes | Group-Object -Property Name | ForEach-Object {
+        [PSCustomObject]@{
+            Name      = $_.Name
+            Instances = $_.Count
+            TotalMB   = [math]::Round(($_.Group | Measure-Object -Property MemMB -Sum).Sum, 1)
+        }
+    } | Sort-Object TotalMB -Descending
+
+    # --- Column headers ---
+    Write-Host ("  {0,-24} {1,-8} {2}" -f "Name", "Inst", "Memory (MB)") -ForegroundColor Gray
+    Write-Host "  +------------------------+--------+---------------+" -ForegroundColor DarkGray
+
+    # --- Rows ---
+    foreach ($row in $grouped) {
+        $memColor = if ($row.TotalMB -ge 200) { "Red" }
+                    elseif ($row.TotalMB -ge 100) { "Yellow" }
+                    else { "White" }
+
+        $nameCol = "  {0,-24}" -f $row.Name
+        $instCol = " x{0,-7}" -f $row.Instances
+
+        Write-Host $nameCol -NoNewline -ForegroundColor White
+        Write-Host $instCol -NoNewline -ForegroundColor DarkGray
+        Write-Host ("{0,8} MB" -f $row.TotalMB) -ForegroundColor $memColor
+    }
+
+    # --- Totals ---
+    $totalMB      = [math]::Round(($grouped | Measure-Object -Property TotalMB -Sum).Sum, 1)
+    $totalProcs   = $Processes.Count
+    $totalMemColor = if ($totalMB -ge 500) { "Red" } elseif ($totalMB -ge 200) { "Yellow" } else { "White" }
+
+    Write-Host "  +------------------------+--------+---------------+" -ForegroundColor DarkGray
+    Write-Host "  Total bloat RAM: " -NoNewline -ForegroundColor Gray
+    Write-Host "$totalMB MB" -NoNewline -ForegroundColor $totalMemColor
+    Write-Host "  across $totalProcs processes" -ForegroundColor DarkGray
+    Write-Host "  +---------------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+# --- TEST (remove after confirming it works) ---
+$results = Get-BloatProcesses
+Show-BloatTable $results
