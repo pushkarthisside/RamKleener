@@ -168,3 +168,109 @@ function Show-BloatTable {
 # --- TEST (remove after confirming it works) ---
 $results = Get-BloatProcesses
 Show-BloatTable $results
+
+# ============================================================
+#  STEP 5: CLEANER — KILL + TEMP CLEAR
+# ============================================================
+
+function Invoke-Cleaner {
+    param(
+        [System.Collections.Generic.List[PSCustomObject]]$Processes
+    )
+
+    $killed      = 0
+    $alreadyGone = 0
+    $denied      = 0
+    $otherFail   = 0
+    $estImpactMB = 0
+
+    Write-Host ""
+    Write-Host "  Cleaning $($Processes.Count) process(es)..." -ForegroundColor DarkGray
+    Write-Host "  +-- CLEANING ----------------------------------------+" -ForegroundColor DarkCyan
+
+    # --- KILL LOOP ---
+    foreach ($proc in $Processes) {
+
+        # Guard: skip malformed entries
+        if (-not $proc.PID -or -not $proc.Name) { continue }
+
+        try {
+            Stop-Process -Id $proc.PID -ErrorAction Stop
+
+            $killed      += 1
+            $estImpactMB += $proc.MemMB
+            Write-Host "  " -NoNewline
+            Write-Host "[OK]" -NoNewline -ForegroundColor Green
+            Write-Host " Killed $($proc.Name) (PID $($proc.PID)) — $($proc.MemMB) MB" -ForegroundColor White
+
+        } catch {
+            $msg = $_.Exception.Message
+
+            if ($msg -match "Cannot find a process" -or $msg -match "process with process id") {
+                $alreadyGone += 1
+                Write-Host "  " -NoNewline
+                Write-Host "[--]" -NoNewline -ForegroundColor Yellow
+                Write-Host " Already closed — $($proc.Name)" -ForegroundColor DarkGray
+
+            } elseif ($msg -match "Access is denied") {
+                $denied += 1
+                Write-Host "  " -NoNewline
+                Write-Host "[!!]" -NoNewline -ForegroundColor Red
+                Write-Host " Access denied — $($proc.Name) (Run as Admin?)" -ForegroundColor Red
+
+            } else {
+                $otherFail += 1
+                Write-Host "  " -NoNewline
+                Write-Host "[??]" -NoNewline -ForegroundColor DarkGray
+                Write-Host " Failed — $($proc.Name): $msg" -ForegroundColor DarkGray
+            }
+        }
+    }
+
+    # --- TEMP FILE CLEAR ---
+    Write-Host ""
+    Write-Host "  Clearing temp files..." -ForegroundColor DarkGray
+
+    $tempPaths   = @($env:TEMP, "$env:SystemRoot\Temp")
+    $tempDeleted = 0
+    $tempMB      = 0
+
+    foreach ($path in $tempPaths) {
+        if (-not (Test-Path $path)) { continue }
+
+        $files = Get-ChildItem -Path $path -File -Recurse -Force -ErrorAction SilentlyContinue
+
+        foreach ($file in $files) {
+            try {
+                $size = $file.Length / 1MB
+                Remove-Item -Path $file.FullName -Force -ErrorAction Stop
+                $tempMB      += $size      # only counted if delete succeeded
+                $tempDeleted += 1
+            } catch {
+                continue
+            }
+        }
+    }
+
+    $tempMB = [math]::Round($tempMB, 1)
+    Write-Host "  " -NoNewline
+    Write-Host "[OK]" -NoNewline -ForegroundColor Green
+    Write-Host " Temp cleared — $tempDeleted files / $tempMB MB" -ForegroundColor White
+
+    # --- SUMMARY ---
+    Write-Host ""
+    Write-Host "  +-- SUMMARY ----------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host "  Killed:             $killed process(es)" -ForegroundColor White
+    Write-Host "  Est. memory impact: $estImpactMB MB" -ForegroundColor Cyan
+    Write-Host "  Temp files removed: $tempDeleted ($tempMB MB)" -ForegroundColor Cyan
+    if ($denied -gt 0) {
+        Write-Host "  Access denied:      $denied (Try running as Admin)" -ForegroundColor Red
+    }
+    Write-Host "  +---------------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+# --- TEST (remove after confirming it works) ---
+$results = Get-BloatProcesses
+Show-BloatTable $results
+Invoke-Cleaner $results
