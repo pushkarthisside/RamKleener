@@ -1,6 +1,5 @@
 RAMkleaner — Master Context & Meta v1.2
 
-CONTEXT BLOCK (paste this first in every new chat)
 I'm building RAMCleaner — a Python CLI tool (pip-installable) that scans Windows/Mac/Linux for known memory-bloating background processes and kills them safely using a tiered protection model. Stack: Python 3, psutil (process scanning/killing), rich (terminal UI), click or simple input() menu (CLI). Safety model: SAFE_TO_KILL whitelist + two-tier never-kill system (NEVER_KILL_CORE which is locked forever + NEVER_KILL_DEFAULT which is protected by default but user-editable via config file). Phase 1 (PowerShell script) is already built and working. Now building Phase 2: proper Python package. Menu: 1. Scan processes / 2. Clean RAM / 3. Full clean / 4. Help / 5. About / 0. Exit. Project structure: cli.py (entry + menu), scanner.py (psutil), cleaner.py (kill logic, temp clear, standby flush), lists.py (all three lists), config.py (reads/writes user config), display.py (rich UI). I build 20% myself, 80% with AI. You are the primary coder. I will describe what each function should do before you write it.
 
 PROJECT META
