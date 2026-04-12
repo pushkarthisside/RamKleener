@@ -8,9 +8,9 @@ import os
 import platform
 from rich.console import Console
 
-from ramkleaner.config import load_config
-from ramkleaner.cleaner import run_clean
-from ramkleaner.display import (
+from ramkleener.config import load_config
+from ramkleener.cleaner import run_clean
+from ramkleener.display import (
     show_header,
     show_menu,
     show_help,
