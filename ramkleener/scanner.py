@@ -7,8 +7,8 @@
 import os
 import psutil
 
-from ramkleaner.lists import NEVER_KILL_CORE
-from ramkleaner.config import get_protected_set, get_kill_set, get_threshold
+from ramkleener.lists import NEVER_KILL_CORE
+from ramkleener.config import get_protected_set, get_kill_set, get_threshold
 
 
 def scan_processes(config: dict) -> tuple[list[dict], dict]:

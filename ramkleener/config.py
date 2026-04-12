@@ -2,9 +2,9 @@ import json
 import os
 from pathlib import Path
 
-from ramkleaner.lists import NEVER_KILL_DEFAULT, SAFE_TO_KILL
+from ramkleener.lists import NEVER_KILL_DEFAULT, SAFE_TO_KILL
 
-# Config loader and helper utilities for RamKleaner.
+# Config loader and helper utilities for ramkleener.
 # Default values used when config file is missing or invalid.
 # ── Default config values ────────────────────────────────────
 DEFAULT_CONFIG = {
@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     "threshold_mb": 100
 }
 
-CONFIG_DIR  = Path.home() / ".ramkleaner"
+CONFIG_DIR  = Path.home() / ".ramkleener"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
@@ -46,7 +46,7 @@ def load_config() -> dict:
 
 def save_config(config: dict) -> bool:
     """
-    Writes config to ~/.ramkleaner/config.json.
+    Writes config to ~/.ramkleener/config.json.
     Creates the directory if it doesn't exist.
     """
     try:
