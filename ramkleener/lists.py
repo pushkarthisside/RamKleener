@@ -49,4 +49,7 @@ SAFE_TO_KILL = {
     # Apps
     "spotifywebhelper", "discordcrashservice",
     "msteams", "ms-teams", "cefsharp.browsersubprocess", "widgets",
+    "whatsapp",
+    "amdow",          # AMD Software
+    "omenring",       # OMEN Gaming Hub
 }
