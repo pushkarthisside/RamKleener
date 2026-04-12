@@ -1,4 +1,4 @@
-RAMKLEENER — MASTER CONTEXT & META v1.3
+RAMKLEENER — MASTER CONTEXT & META v1.2
 
 I'm building RamKleener — a Python CLI tool (pip-installable) that scans Windows/Mac/Linux for known memory-bloating background processes and kills them safely using a tiered protection model.
 
