@@ -40,7 +40,7 @@ def scan_processes(config: dict) -> tuple[list[dict], dict]:
             if not pinfo['name'] or not pinfo['memory_info']:
                 continue
 
-            name = pinfo['name'].lower()
+            name = pinfo['name'].lower().removesuffix('.exe')
             pid  = pinfo['pid']
 
             total_scanned += 1
