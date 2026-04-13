@@ -1,156 +1,62 @@
-RAMKLEENER — MASTER CONTEXT & META v1.2
+RAMKLEENER — MASTER CONTEXT & META v2.0
 
-I'm building RamKleener — a Python CLI tool (pip-installable) that scans Windows/Mac/Linux for known memory-bloating background processes and kills them safely using a tiered protection model.
-
-Phase 1 (PowerShell) is COMPLETE and working:
-
-* Process scanning
-* 3-tier safety model (CORE / DEFAULT / SAFE)
-* Threshold-based filtering
-* Grouped process display
-* Kill engine with error handling
-* Temp file cleanup
-* Interactive CLI menu with confirmation
-* Admin check + graceful failures
-
-Now building Phase 2: Python modular package.
-
----
+A pip-installable Python CLI tool that scans Windows/Mac/Linux for memory-bloating
+background processes and kills them safely using a tiered protection model.
 
 ONE-LINER
-"Scans system processes, filters using a safe tiered model, and terminates known memory-heavy background tasks with user confirmation — all from the terminal."
-
----
+"Scans system processes, filters using a safe tiered model, and terminates known
+memory-heavy background tasks with user confirmation — all from the terminal."
 
 STATUS
-
-* Phase 1: ✅ Complete (PowerShell CLI tool)
-* Phase 2: 🔄 Starting (Python rebuild)
-* Goal: pip-installable CLI tool (ramkleener)
-
----
+Phase 1: ✅ Complete (PowerShell — /Phase1/RamKleener.ps1)
+Phase 2: ✅ Complete (Python package — pip install -e .)
+Phase 3: 🔄 Planned (fixes, README, PyInstaller .exe)
 
 STACK
-psutil        — process scan, memory, kill
-rich          — terminal UI (tables, colors, bars)
-click/input   — CLI interaction
-platform      — OS detection
-ctypes        — Windows-specific features (later)
-json          — config system
-PyInstaller   — packaging to .exe
-
----
+psutil, rich, platform, ctypes, json, PyInstaller
 
 FILE STRUCTURE
 ramkleener/
+├── Phase1/RamKleener.ps1
 ├── ramkleener/
-│   ├── cli.py
-│   ├── scanner.py
-│   ├── cleaner.py
-│   ├── lists.py
-│   ├── config.py
-│   └── display.py
+│   ├── __init__.py
+│   ├── cli.py        — entry point, menu loop, admin check
+│   ├── scanner.py    — psutil scan, three-tier filter, metadata
+│   ├── cleaner.py    — kill engine, temp cleanup, standby flush
+│   ├── lists.py      — three protection lists (sets)
+│   ├── config.py     — load/save ~/.ramkleener/config.json
+│   └── display.py    — rich UI, RAM bar, progress, table, summary
 ├── requirements.txt
 ├── setup.py
 └── README.md
 
----
-
 SAFETY MODEL
+NEVER_KILL_CORE     — locked forever, OS critical
+NEVER_KILL_DEFAULT  — protected by default, user can override via config
+SAFE_TO_KILL        — known bloat, user can extend via config
+UNKNOWN             — always skipped (safe by default)
 
-NEVER_KILL_CORE
-
-* locked forever
-* critical OS processes
-
-NEVER_KILL_DEFAULT
-
-* protected by default
-* user can override via config
-
-SAFE_TO_KILL
-
-* known bloat
-* user can extend
-
-LOGIC:
-
-for each process:
-if in NEVER_KILL_CORE → skip
-elif in NEVER_KILL_DEFAULT + user_protected → skip
-elif in SAFE_TO_KILL + user_kill_list → kill
-else → skip
-
-UNKNOWN = SAFE
-
----
-
-PHASE 1 LEARNINGS (IMPORTANT)
-
-* confirmation before kill is required
-* grouping processes improves clarity
-* threshold prevents over-aggressive kills
-* admin check improves UX
-* temp cleanup adds real value
-* clear output builds trust
-* cleaner should NOT contain decision logic
-
----
-
-KEY RULES
-
-* never kill unknown processes
-* always show before acting
-* scan → display → confirm → clean
-* threshold filtering is mandatory
-* errors should not crash program
-* execution logic must stay separate from filtering logic
-
----
-
-CONFIG (PLANNED)
-
-~/.ramkleener/config.json
-
+CONFIG — ~/.ramkleener/config.json
 {
-"user_protected": [],
-"user_kill_list": [],
-"threshold_mb": 100
+  "user_protected": [],
+  "user_kill_list": [],
+  "threshold_mb": 100
 }
 
----
+KNOWN ISSUES (fix in Phase 3)
+- browsers in SAFE_TO_KILL need rethinking (foreground vs background)
+- .exe suffix stripping added in scanner (Windows psutil returns name.exe)
+- standby flush requires Admin
+- lists need tuning per real machine data
 
-KNOWN RISKS
-
-* process name variations (.exe, casing)
-* permission denied errors (normal)
-* temp cleanup can be slow
-* memory freed is only an estimate
-
----
-
-BUILD ORDER
-
-1. lists.py
-2. config.py
-3. scanner.py
-4. display.py
-5. cleaner.py
-6. cli.py
-7. setup.py
-
----
+KEY RULES
+- never kill unknown processes
+- scan → display → confirm → clean (always in this order)
+- threshold filtering is mandatory
+- errors must never crash the program
+- cleaner executes, never decides
 
 AI WORKFLOW
-
-Claude → writes code
-ChatGPT → explains + validates
-Gemini → bug checks
-
-You decide final output.
-
----
-
-PROMPT FORMAT
-
-"Write a Python function in scanner.py that scans all processes using psutil, applies the three-tier safety model (from lists.py + config.py), filters by threshold, and returns a list of dicts with name, PID, and memory in MB."
+Claude → primary coder
+ChatGPT/Gemini → bug checks and validation
+You → final decisions
