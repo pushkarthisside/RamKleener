@@ -10,7 +10,7 @@ memory-heavy background tasks with user confirmation — all from the terminal."
 STATUS
 Phase 1: ✅ Complete (PowerShell — /Phase1/RamKleener.ps1)
 Phase 2: ✅ Complete (Python package — pip install -e .)
-Phase 3: 🔄 Planned (fixes, README, PyInstaller .exe)
+Phase 3: 🔄 Planned -- In future (fixes, README, PyInstaller .exe)
 
 STACK
 psutil, rich, platform, ctypes, json, PyInstaller
