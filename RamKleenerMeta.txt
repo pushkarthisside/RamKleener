@@ -56,7 +56,3 @@ KEY RULES
 - errors must never crash the program
 - cleaner executes, never decides
 
-AI WORKFLOW
-Claude → primary coder
-ChatGPT/Gemini → bug checks and validation
-You → final decisions
