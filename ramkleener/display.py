@@ -248,7 +248,7 @@ def show_about() -> None:
         "[white]RamKleener v2.0[/white]\n"
         "[dim]Built by Pushkar\n"
         "Phase 1: PowerShell  |  Phase 2: Python\n"
-        "github.com/pushkar/RamKleener[/dim]",
+        "github.com/pushkarthisside/RamKleener[/dim]",
         box=box.ROUNDED,
         padding=(0, 2)
     ))
