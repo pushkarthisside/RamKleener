@@ -1,55 +1,37 @@
-# 🚀 RamKleener
+# 🚀 RamKleener v2.0
 
-**Kill background bloat. Free your RAM. Stay in control.**
+> **Kill background bloat. Free your RAM. Stay in control.**
 
-RamKleener is a terminal-based utility designed to scan, highlight, and safely terminate memory-heavy background tasks. Unlike "one-click optimizers" that make risky assumptions, RamKleener puts the decision-making power in your hands.
+RamKleener is a Python CLI utility that scans system processes, filters them using a strict safety model, and terminates known memory-heavy background tasks with user confirmation — directly from the terminal.
 
 ---
 
 ## ✨ Features
 
-- 🔍 **Deep Scan** — Full process visibility with real-time memory usage
-- 🛡️ **3-Tier Safety** — Hardcoded protection for OS-critical processes
-- 🧹 **System Scrub** — Integrated cleanup for system and user temp folders
-- 📊 **Clean UI** — Grouped process views powered by the `rich` library
-- ⚙️ **Fully Customizable** — Dynamic kill/protect lists via config or source
-- 🖥️ **Cross-Platform** — Native support for Windows, Linux, and macOS
+- **Safe by Design** — Uses a strict two-tier safety model so only known, non-critical processes are targeted.
+- **Grouped Process Control** — Apps like Chrome or Edge run multiple processes — RamKleener groups them so you can handle everything in one step.
+- **No Accidental Kills (PID Protection)** — Double-checks each process before terminating to avoid mistakes caused by system PID reuse.
+- **Fast Scanning** — Efficient filtering ensures quick results even with hundreds of running processes. *(O(1) Filtering)*
+- **Clean Terminal UI** — Displays RAM usage and results clearly with simple bars and tables.
+- **Customizable** — Add your own protected apps or kill targets through a simple config file.
 
 ---
 
-## 🧠 The Philosophy
+## 🛡️ Safety Model
 
-Modern operating systems are cluttered with background updaters, sync tools, and crash handlers you never explicitly started. RamKleener doesn't guess what to kill. It surfaces the data and gives you the surgical tools to decide what stays and what goes.
+> **If it's not clearly safe, it won't be touched.**
 
----
+| Tier | What's Included | Behavior |
+|---|---|---|
+| 🔒 **Protected** | Core system processes, security services, critical apps | Completely locked — cannot be terminated |
+| ⚡ **Safe to Kill** | Browsers, updaters, background services | Eligible for termination |
+| ❓ **Unknown** | Anything not recognized | Ignored by default |
 
-## ⚠️ The Honest Truth
-
-This is not plug-and-play.
-
-Every system is unique. A process that is useless on one machine might be critical on another. If you run this without configuration, it will likely find nothing to clean — that is a feature, not a bug.
-
-RamKleener is built to be customized for your specific workflow.
+If a process appears in both categories: **Protected always wins.**
 
 ---
 
-## ⚙️ How It Works
-
-RamKleener uses a strict 3-tier protection model to ensure system stability:
-
-| Tier | Name | Behavior |
-|------|------|----------|
-| 1 | `NEVER_KILL_CORE` | OS critical processes — hard-locked and never touched |
-| 2 | `NEVER_KILL_DEFAULT` | Protected by default (Launchers, AV, Games) |
-| 3 | `SAFE_TO_KILL` | Known bloat — eligible for termination if above threshold |
-
-**The Golden Rule:** If a process isn't in a list, it's skipped. Unknown = Safe.
-
----
-
-## 🚀 Getting Started
-
-### 1. Clone & Install
+## 🚀 Installation
 
 ```bash
 git clone https://github.com/pushkarthisside/RamKleener.git
@@ -57,109 +39,86 @@ cd RamKleener
 pip install -e .
 ```
 
-### 2. Configure Your Kill List
-
-Open Task Manager → Details tab. Find background processes you don't need (e.g. `brave.exe`, `onedrive.exe`, `spotify.exe`).
-
-Add them to `ramkleener/lists.py`:
-
-```python
-SAFE_TO_KILL = {
-    "brave",
-    "spotify",
-    "onedrive",
-    # ... add your own
-}
-```
-
-### 3. Run
+Then run it:
 
 ```bash
 ramkleener
 ```
 
-> Run as Administrator (Windows) or `sudo` (Linux/Mac) for full cleanup — enables system temp deletion and standby RAM flush.
+---
+
+## 🎮 Usage
+
+```
+1. Scan             — show flagged processes + RAM usage
+2. Kill All         — terminate all flagged processes with summary
+3. Kill One by One  — grouped flow per app (y=kill  n=skip  q=quit)
+4. Help
+5. About
+0. Exit
+```
+
+**Kill One by One** is recommended — it groups processes by app so you decide per application, not per PID.
 
 ---
 
-## 📋 Menu
+## 🧩 Customize
 
-| Option | Action |
-|--------|--------|
-| `1` Scan | Preview only — nothing is killed |
-| `2` Clean | Kill bloat + clear temp files |
-| `3` Full Clean | Kill + temp + standby RAM flush + RAM report |
-| `4` Help | — |
-| `0` Exit | — |
+RamKleener uses a config file to know what to kill and what to protect on your specific machine.
+
+**Where is it?**
+
+```
+Windows:   C:\Users\YourName\.ramkleener\config.json
+Mac/Linux: /home/yourname/.ramkleener/config.json
+```
+
+This file is created automatically the first time you run RamKleener. Open it with any text editor (Notepad works fine).
 
 ---
 
-## ⚙️ Config
+**How do I know what to add?**
 
-Located at `~/.ramkleener/config.json` — created automatically on first save.
+On Windows — open Task Manager → go to the **Details** tab → look for processes using high memory that you don't need running in the background (updaters, sync tools, crash handlers).
+
+Note the name in the **Name** column (e.g. `Spotify.exe`). Remove the `.exe` part and add it lowercase.
+
+---
+
+**Adding a process to kill:**
 
 ```json
 {
-  "user_protected": ["my_work_app"],
-  "user_kill_list": ["heavy_updater"],
+  "user_protected": [],
+  "user_kill_list": ["spotify", "discord", "brave"],
   "threshold_mb": 50
 }
 ```
 
-| Key | Purpose |
-|-----|---------|
-| `user_protected` | Extra processes to never kill — added to Tier 2 |
-| `user_kill_list` | Extra processes to kill — added to Tier 3 |
-| `threshold_mb` | Ignore processes using less than this much RAM |
+**Protecting something you don't want touched:**
 
----
-
-## 🧪 Phase 1 — PowerShell Version
-
-Same logic. Windows only. No Python required.
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-.\Phase1\RamKleener.ps1
+```json
+{
+  "user_protected": ["docker", "my_work_app"],
+  "user_kill_list": [],
+  "threshold_mb": 50
+}
 ```
 
----
+- `user_protected` — RamKleener will never touch these, no matter what
+- `user_kill_list` — RamKleener will target these if they're using enough RAM
+- `threshold_mb` — processes using less RAM than this are ignored entirely (default: 50 MB, minimum: 10 MB)
 
-## 📁 Structure
-
-```
-RamKleener/
-├── Phase1/
-│   └── RamKleener.ps1
-├── ramkleener/
-│   ├── lists.py       ← edit this
-│   ├── config.py
-│   ├── scanner.py
-│   ├── cleaner.py
-│   ├── display.py
-│   └── cli.py
-├── setup.py
-├── requirements.txt
-└── README.md
-```
+Not sure what to add? Run option `1. Scan` first — it shows exactly what RamKleener can already see on your machine. Start from there.
 
 ---
 
-## ⚠️ Known Limitations
+## 👤 About
 
-- RAM freed is an estimate — Windows memory management is complicated
-- Standby flush requires Admin or it silently fails
-- Process names vary across Windows versions — always verify in Task Manager Details
-- Temp cleanup can lag on first run if your temp folder is large
+I built it because my 8GB RAM laptop was constantly bloated and I couldn't find a tool that was both safe and customizable enough to trust.
 
----
+RamKleener is the result. It's tuned to my machine, and with a few config edits, it can be tuned to yours too.
 
-## 🛣️ Roadmap
+If you run into any issues — installation, config, or anything else — feel free to [open an issue](https://github.com/pushkarthisside/RamKleener/issues).
 
-- [ ] PyInstaller `.exe` build — no Python required
-- [ ] Quiet mode (auto-clean when RAM crosses threshold)
-- [ ] Interactive list editor in the menu
-
----
-
-*Built by Pushkar — Phase 1 ✅ Phase 2 ✅ Phase 3 (in tha future maybe).*
+Cheers 🙂 — hope it helps.
