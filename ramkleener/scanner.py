@@ -1,102 +1,98 @@
 # ============================================================
-#  scanner.py — RamKleener v2.0
-#  Scans all running processes, applies three-tier safety model,
-#  filters by threshold, returns bloat list + scan metadata.
+#  scanner.py — RamKleener Process Scanner (v1.4 Final)
+#  Stable, efficient, and production-ready baseline.
 # ============================================================
 
-import os
 import psutil
+import platform
+from ramkleener.config import get_effective_lists
 
-from ramkleener.lists import NEVER_KILL_CORE
-from ramkleener.config import get_protected_set, get_kill_set, get_threshold
 
-
-def scan_processes(config: dict) -> tuple[list[dict], dict]:
+def _normalize(name, is_windows):
     """
-    Scans all running processes and filters against the three-tier model.
-
-    Returns:
-        bloat_list  — list of dicts: {name, pid, mem_mb}
-        metadata    — dict: {total_scanned, total_bloat_mem, threshold_used}
+    Central normalization logic to keep config + runtime consistent.
     """
+    name = name.lower().strip()
+    if is_windows:
+        name = name.removesuffix(".exe")
+    return name
 
-    protected_set = get_protected_set(config)   # NEVER_KILL_DEFAULT + user_protected
-    kill_set      = get_kill_set(config)         # SAFE_TO_KILL + user_kill_list
-    threshold     = get_threshold(config)        # minimum MB to include
 
-    current_pid   = os.getpid()                  # self-exclusion by PID
+def scan_processes(config, debug=False):
+    """
+    Scans running processes and filters against the 2-tier safety model.
+    """
+    raw_protected, raw_kill_list = get_effective_lists(config)
 
-    bloat_list    = []
-    total_scanned = 0
-    total_bloat_mem = 0.0
+    is_windows = platform.system() == "Windows"
 
-    # OPTIMIZATION: Fetch required attributes in one go for speed
-    for proc in psutil.process_iter(['pid', 'name', 'memory_info']):
+    effective_protected = {_normalize(p, is_windows) for p in raw_protected}
+    effective_kill_list = {_normalize(k, is_windows) for k in raw_kill_list}
+
+    threshold_mb = config.get("threshold_mb", 10)
+
+    flagged = []
+
+    # Debug control (prevents console spam)
+    debug_count = 0
+    DEBUG_LIMIT = 50
+
+    for proc in psutil.process_iter(["pid", "name", "memory_info"]):
         try:
-            # When using attrs in process_iter, data is accessed via .info dict
             pinfo = proc.info
-            
-            # Some OS-level processes might have a None name or memory_info, skip them
-            if not pinfo['name'] or not pinfo['memory_info']:
+            raw_name = pinfo.get("name")
+            mem_info = pinfo.get("memory_info")
+            pid = pinfo.get("pid")
+
+            if not raw_name or not mem_info:
                 continue
 
-            name = pinfo['name'].lower().removesuffix('.exe')
-            pid  = pinfo['pid']
+            normalized = _normalize(raw_name, is_windows)
 
-            total_scanned += 1
-
-            # --- THREE-TIER FILTER ---
-
-            # Self-exclusion by PID (primary defense)
-            if pid == current_pid:
+            # --- Tier 1: PROTECTED ---
+            if normalized in effective_protected:
+                if debug and debug_count < DEBUG_LIMIT:
+                    print(f"[DEBUG] Skipping {raw_name} (PID {pid}): PROTECTED")
+                    debug_count += 1
                 continue
 
-            # Tier 1: NEVER_KILL_CORE — locked forever
-            if name in NEVER_KILL_CORE:
+            # --- Tier 2: SAFE_TO_KILL ---
+            if normalized in effective_kill_list:
+                ram_mb = round(mem_info.rss / (1024 * 1024), 1)
+
+                if ram_mb >= threshold_mb:
+                    flagged.append({
+                        "pid": pid,
+                        "name": raw_name,
+                        "normal": normalized,
+                        "ram_mb": ram_mb
+                    })
+                elif debug and debug_count < DEBUG_LIMIT:
+                    print(f"[DEBUG] Skipping {raw_name} (PID {pid}): Below {threshold_mb}MB")
+                    debug_count += 1
+
                 continue
 
-            # Tier 2: NEVER_KILL_DEFAULT + user_protected
-            if name in protected_set:
-                continue
+            # --- UNKNOWN ---
+            if debug and debug_count < DEBUG_LIMIT:
+                print(f"[DEBUG] Skipping {raw_name} (PID {pid}): UNKNOWN")
+                debug_count += 1
 
-            # Only proceed if in kill set
-            if name not in kill_set:
-                continue
-
-            # --- MEMORY CHECK ---
-            mem_mb = round(pinfo['memory_info'].rss / (1024 * 1024), 1)
-
-            # Threshold filter
-            if mem_mb < threshold:
-                continue
-
-            bloat_list.append({
-                "name":   name,
-                "pid":    pid,
-                "mem_mb": mem_mb
-            })
-
-            total_bloat_mem += mem_mb
-
-        except psutil.AccessDenied:
-            # Protected process — skip silently
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
 
-        except psutil.NoSuchProcess:
-            # Process died during scan — skip silently
-            continue
+    flagged.sort(key=lambda p: p["ram_mb"], reverse=True)
+    return flagged
 
-        except Exception:
-            # Any other OS-level error — never crash the scan
-            continue
 
-    # Sort by memory descending — heaviest bloat first
-    bloat_list.sort(key=lambda x: x["mem_mb"], reverse=True)
-
-    metadata = {
-        "total_scanned":    total_scanned,
-        "total_bloat_mem":  round(total_bloat_mem, 1),
-        "threshold_used":   threshold
+def get_system_ram():
+    """
+    Fetches global RAM stats for display/UI.
+    """
+    mem = psutil.virtual_memory()
+    return {
+        "total_mb": round(mem.total / (1024 * 1024), 1),
+        "available_mb": round(mem.available / (1024 * 1024), 1),
+        "used_mb": round(mem.used / (1024 * 1024), 1),
+        "percent_used": mem.percent
     }
-
-    return bloat_list, metadata

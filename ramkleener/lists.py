@@ -1,63 +1,83 @@
 # ============================================================
-#  lists.py — RamKleener v2.0
-#  Three-tier process protection model
-#  All names lowercase — normalization happens at scan time
+#  lists.py — RamKleener Process Lists (v1.3 Meta)
 # ============================================================
 
-# TIER 1: LOCKED FOREVER — no one can edit this
-# Critical OS processes. Killing any of these = system crash.
-NEVER_KILL_CORE = {
-    # Windows core
-    "system", "smss", "csrss", "wininit", "winlogon",
-    "services", "lsass", "dwm", "explorer", "svchost",
-    "taskmgr", "powershell", "pwsh", "cmd", "conhost",
-    # Linux core
-    "init", "systemd", "kthreadd", "migration", "watchdog",
-    "kworker", "ksoftirqd", "rcu_sched",
-    # Mac core
-    "launchd", "kernel_task", "loginwindow", "windowserver",
-    # Self-Protection
-    "python", "python3", "pythonw", "ramkleaner"
-}
+# PROTECTED: Locked forever. Hardcoded safety.
+# Rule: If it's here, it CANNOT be in SAFE_TO_KILL.
+PROTECTED = {
+    # --- OS CORE: Windows ---
+    "system",                # Hardware-level kernel process
+    "smss",                  # Session Manager Subsystem
+    "csrss",                 # Client/Server Runtime Process
+    "wininit",               # Windows Initialization
+    "winlogon",              # User Login handling
+    "services",              # Service Control Manager
+    "lsass",                 # Local Security Authority (Crucial)
+    "dwm",                   # Desktop Window Manager (The UI)
+    "explorer",              # Taskbar and File Explorer
+    "svchost",               # Generic Host Process for Win Services
+    "taskmgr",               # Task Manager
+    "powershell", "pwsh",    # Terminal shells
+    "cmd", "conhost",        # Command prompt and console host
 
-# TIER 2: PROTECTED BY DEFAULT — user can remove via config
-# Games, launchers, security tools. Safe to keep, risky to kill blindly.
-NEVER_KILL_DEFAULT = {
-    # Riot / Valorant
-    "vgc", "vgtray", "valorant", "valorant-win64-shipping",
+    # --- SECURITY & ANTI-CHEAT ---
+    "msmpeng", "nissrv",     # Microsoft Defender / Antivirus
+    "securityhealthservice", # Windows Security Health
+    "vgc", "vgtray",         # Riot Vanguard (Valorant)
+    "valorant",              # Main game process
+
+    # --- GAMING LAUNCHERS (Protect to avoid logout/crash) ---
+    "steam", "steamwebhelper",
+    "epicgameslauncher",
+    "battle.net",
     "riotclientservices", "riotclientux", "riotclientuxrender",
-    # Windows security
-    "msmpeng", "nissrv", "securityhealthservice",
-    # Game launchers
-    "steam", "steamwebhelper", "epicgameslauncher", "battle.net",
+
+    # --- SELF-PROTECTION (Essential) ---
+    "python", "python3", "pythonw", # Don't kill the interpreter!
+    "ramkleener",                   # Don't kill this script!
 }
 
-# TIER 3: SAFE TO KILL — known bloat, user can extend via config
+# SAFE_TO_KILL: Explicitly named bloat. 
+# Only processes found here (or in validated user config) get terminated.
 SAFE_TO_KILL = {
-    # Browsers
-    "chrome", "msedge", "msedgewebview2", "browser_broker",
-    # Google updaters
-    "googleupdate", "googlecrashhandler", "googlecrashhandler64",
-    # Microsoft updaters
-    "microsoftedgeupdate",
-    # Cloud
-    "onedrive",
-    # Adobe
-    "adobeipcbroker", "adobeupdateservice", "agmservice", "armsvc",
-    # Windows telemetry
-    "compattelrunner", "musnotification", "musnotifyicon",
-    # Apps
-    "spotifywebhelper", "discordcrashservice",
-    "msteams", "ms-teams", "cefsharp.browsersubprocess", "widgets",
-    # Brave browser
-    "brave",
-    "bravecrashhandler",
-    "bravecrashhandler64",
+    # --- BROWSERS & WEB VIEWERS ---
+    "chrome",                # Google Chrome
+    "msedge",                # Microsoft Edge
+    "msedgewebview2",        # Edge-based web rendering in apps
+    "browser_broker",        # Browser helper
+    "brave",                 # Brave Browser
+    "bravecrashhandler",     # Brave error reporter
 
-    # WhatsApp
-    "whatsapp.root",
+    # --- UPDATERS (Silent RAM eaters) ---
+    "googleupdate",          # Google services updater
+    "googlecrashhandler",    # Google crash reporter
+    "googlecrashhandler64",
+    "microsoftedgeupdate",   # Edge browser updater
+    "adobeupdateservice",    # Adobe background updates
+    "armsvc",                # Adobe Acrobat Update Service
 
-    # OMEN
-    "omencommandcenterbackground",
-    "omenring",
+    # --- CLOUD & SYNC ---
+    "onedrive",              # Microsoft Cloud Sync
+    "dropbox",               # Dropbox background sync
+    "adobeipcbroker",        # Adobe Creative Cloud sync helper
+
+    # --- COMMUNICATION & OFFICE ---
+    "msteams", "ms-teams",   # Microsoft Teams (Famous RAM hog)
+    "discordcrashservice",   # Discord background helper
+    "slack",                 # Slack desktop app
+    "whatsapp.root",         # WhatsApp background process
+    "notion",                # Notion desktop background helpers
+
+    # --- TELEMETRY & BLOAT ---
+    "compattelrunner",       # Windows Compatibility Telemetry (Heavy)
+    "musnotification",       # Windows Update notifications
+    "musnotifyicon",
+    "widgets",               # Windows 11 Widgets panel
+    "spotifywebhelper",      # Spotify background helper
+    "cefsharp.browsersubprocess", # Generic embedded browser bloat
+    "agmservice",            # Adobe Genuine Monitor
+
+    # --- OEM BLOAT (Laptop specific) ---
+    "omencommandcenterbackground", # HP Omen background
+    "omenring",                   # HP Omen lighting
 }

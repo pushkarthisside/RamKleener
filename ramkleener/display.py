@@ -1,255 +1,186 @@
 # ============================================================
-#  display.py — RamKleener v2.0
-#  All terminal UI — header, RAM bar, scan progress,
-#  process table, and summary panels.
+#  display.py — RamKleener Terminal UI
+#  Handles all rich output: RAM bar, process table, results.
 # ============================================================
 
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
-from rich.panel import Panel
-from rich.text import Text
+from rich.progress import BarColumn, Progress, TextColumn
+from rich.markup import escape  # CRITICAL: Prevents names with [brackets] from crashing UI
 from rich import box
-from rich.markup import escape
-import psutil
 
 console = Console()
 
 
-# ── RAM Bar ──────────────────────────────────────────────────
+def render_ram_bar(ram_stats, label=None):
+    """
+    Renders a color-coded RAM usage bar.
+    Green < 60%, Yellow 60-80%, Red > 80%.
+    """
+    percent   = ram_stats["percent_used"]
+    used_gb   = ram_stats["used_mb"]  / 1024
+    total_gb  = ram_stats["total_mb"] / 1024
 
-def get_ram_stats() -> dict:
-    mem = psutil.virtual_memory()
-    return {
-        "total_gb": round(mem.total / (1024 ** 3), 1),
-        "used_gb":  round(mem.used  / (1024 ** 3), 1),
-        "free_gb":  round(mem.available / (1024 ** 3), 1),
-        "pct":      mem.percent
-    }
-
-
-def show_ram_bar() -> None:
-    r = get_ram_stats()
-    pct = r["pct"]
-
-    if pct >= 85:
-        color = "red"
-    elif pct >= 65:
+    if percent < 60:
+        color = "green"
+    elif percent < 80:
         color = "yellow"
     else:
-        color = "green"
+        color = "red"
 
-    bar_len = 30
-    filled  = int(pct / 100 * bar_len)
-    empty   = bar_len - filled
-    bar     = f"[{color}]{'█' * filled}[/{color}][dim]{'░' * empty}[/dim]"
+    prefix = f"  [bold]{label}[/bold]  " if label else "  "
 
-    line = Text()
-    line.append("  RAM  ")
+    console.print()
     console.print(
-        f"  RAM  [{bar}]  [{color}]{pct}%[/{color}]"
-        f"   [dim]{r['used_gb']} / {r['total_gb']} GB[/dim]"
+        f"{prefix}[bold]System RAM[/bold]  "
+        f"[{color}]{used_gb:.2f} GB used / {total_gb:.2f} GB total "
+        f"({percent:.1f}%)[/{color}]"
     )
-
-
-# ── Header ───────────────────────────────────────────────────
-
-def show_header(is_admin: bool) -> None:
-    console.clear()
-    console.print()
-    console.print(Panel(
-        "[bold cyan]RamKleener v2.0[/bold cyan]  [dim]by Pushkar[/dim]",
-        box=box.DOUBLE,
-        expand=False,
-        padding=(0, 4)
-    ))
-
-    if not is_admin:
-        console.print(
-            "  [yellow][!] Not running as Admin — some kills may fail.[/yellow]"
-        )
-
-    show_ram_bar()
-    console.print()
-
-
-# ── Scan Progress Bar ─────────────────────────────────────────
-
-def run_scan_with_progress(config: dict) -> tuple[list[dict], dict]:
-    """
-    Runs the scan with a live progress bar.
-    Imports scanner here to avoid circular imports.
-    """
-    from ramkleener.scanner import scan_processes
 
     with Progress(
-        TextColumn("  [cyan]Scanning...[/cyan]"),
-        BarColumn(bar_width=30, complete_style="cyan", finished_style="green"),
-        TaskProgressColumn(),
-        transient=True,       # clears the bar after scan completes
-        console=console
+        TextColumn("  "),
+        BarColumn(bar_width=50, complete_style=color, finished_style=color),
+        console=console,
+        transient=False,
     ) as progress:
+        task = progress.add_task("", total=100)
+        progress.update(task, completed=percent)
 
-        task = progress.add_task("scan", total=100)
-
-        # Pulse progress while scanning (scan is synchronous)
-        # We simulate progress in thirds — start, mid, done
-        progress.update(task, advance=20)
-        bloat_list, metadata = scan_processes(config)
-        progress.update(task, completed=100)
-
-    return bloat_list, metadata
-
-
-# ── Process Table ─────────────────────────────────────────────
-
-def show_bloat_table(bloat_list: list[dict], metadata: dict) -> None:
     console.print()
 
-    # Metadata line above table
-    console.print(
-        f"  [dim]Scanned [white]{metadata['total_scanned']}[/white] processes"
-        f" — threshold [white]{metadata['threshold_used']} MB[/white][/dim]"
-    )
-    console.print()
 
-    if not bloat_list:
-        console.print(
-            Panel(
-                "[green]No bloat processes found above threshold.[/green]",
-                box=box.ROUNDED,
-                padding=(0, 2)
-            )
-        )
-        console.print()
+def render_scan_table(flagged):
+    """Renders a standard table for the 'Scan' mode."""
+    if not flagged:
+        console.print("  [green]✓ No bloat processes found above threshold.[/green]\n")
         return
 
-    # Group by name
-    grouped: dict[str, dict] = {}
-    for proc in bloat_list:
-        name = proc["name"]
-        if name not in grouped:
-            grouped[name] = {"name": name, "instances": 0, "total_mb": 0.0}
-        grouped[name]["instances"] += 1
-        grouped[name]["total_mb"]  += proc["mem_mb"]
-
-    rows = sorted(grouped.values(), key=lambda x: x["total_mb"], reverse=True)
-
     table = Table(
-        box=box.SIMPLE_HEAD,
-        show_header=True,
-        header_style="dim",
-        padding=(0, 1),
-        expand=False
+        title="Flagged Processes",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        title_style="bold white",
+        border_style="bright_black",
     )
 
-    table.add_column("Process",   style="white",    min_width=22)
-    table.add_column("Instances", style="dim",       justify="right", min_width=9)
-    table.add_column("Memory",    justify="right",   min_width=10)
+    table.add_column("#",      style="dim",          width=4,  justify="right")
+    table.add_column("PID",    style="cyan",          width=8,  justify="right")
+    table.add_column("Name",   style="white",         width=30, justify="left")
+    table.add_column("RAM",    style="yellow",        width=12, justify="right")
 
-    for row in rows:
-        mb = round(row["total_mb"], 1)
-
-        if mb >= 200:
-            mem_str = f"[red]{mb} MB[/red]"
-        elif mb >= 100:
-            mem_str = f"[yellow]{mb} MB[/yellow]"
-        else:
-            mem_str = f"{mb} MB"
-
-        # FIX: Escape the process name to prevent rich markup crashes
-        safe_name = escape(row["name"])
-
+    for i, proc in enumerate(flagged, start=1):
         table.add_row(
-            safe_name,
-            f"x{row['instances']}",
-            mem_str
+            str(i),
+            str(proc["pid"]),
+            escape(proc["name"]),  # Safety first
+            f"{proc['ram_mb']:.1f} MB"
         )
 
     console.print(table)
+    console.print()
 
-    # Total line
-    total_mb = round(metadata["total_bloat_mem"], 1)
-    total_color = "red" if total_mb >= 500 else "yellow" if total_mb >= 200 else "white"
-    console.print(
-        f"  [dim]Total bloat RAM:[/dim]"
-        f"  [{total_color}]{total_mb} MB[/{total_color}]"
-        f"  [dim]across {len(bloat_list)} processes[/dim]"
+
+def render_grouped_table(groups):
+    """Renders aggregated table for 'Kill One by One' mode."""
+    if not groups:
+        console.print("  [green]✓ No bloat processes found.[/green]\n")
+        return
+
+    table = Table(
+        title="Flagged Processes (Grouped)",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        title_style="bold white",
+        border_style="bright_black",
     )
+
+    table.add_column("#",         style="dim",          width=4,  justify="right")
+    table.add_column("Name",      style="white",         width=28, justify="left")
+    table.add_column("Instances", style="cyan",          width=10, justify="right")
+    table.add_column("Total RAM", style="yellow",        width=12, justify="right")
+
+    for i, group in enumerate(groups, start=1):
+        table.add_row(
+            str(i),
+            escape(group["name"]),
+            str(group["count"]),
+            f"{group['ram_mb']:.1f} MB"
+        )
+
+    console.print(table)
     console.print()
 
 
-# ── Clean Summary ─────────────────────────────────────────────
+def render_kill_summary(results, ram_before=None, ram_after=None):
+    """Renders summary with a borderless table for perfect alignment."""
+    if not results:
+        console.print("  [dim]Nothing to summarize.[/dim]\n")
+        return
 
-def show_clean_summary(
-    killed: int,
-    already_gone: int,
-    denied: int,
-    other_fail: int,
-    est_impact_mb: float,
-    temp_deleted: int,
-    temp_mb: float
-) -> None:
+    killed  = [r for r in results if r["success"]]
+    skipped = [r for r in results if not r["success"]]
+    freed   = sum(r["ram_mb"] for r in killed)
 
-    lines = []
-    lines.append(f"[white]Killed:[/white]              [green]{killed}[/green] process(es)")
-    lines.append(f"[white]Est. memory impact:[/white]  [cyan]{round(est_impact_mb, 1)} MB[/cyan]")
-    lines.append(f"[white]Temp files removed:[/white]  [cyan]{temp_deleted} files / {temp_mb} MB[/cyan]")
+    summary_table = Table(box=None, show_header=False, pad_edge=False)
+    summary_table.add_column("Status", width=12)
+    summary_table.add_column("Name",   width=30)
+    summary_table.add_column("Impact", width=15)
 
-    if already_gone:
-        lines.append(f"[white]Already closed:[/white]      [dim]{already_gone}[/dim]")
-    if denied:
-        lines.append(f"[white]Access denied:[/white]       [red]{denied} (try running as Admin)[/red]")
-    if other_fail:
-        lines.append(f"[white]Other failures:[/white]      [dim]{other_fail}[/dim]")
+    for r in results:
+        status = "[green]✓ Killed[/green]" if r["success"] else "[red]✗ Skipped[/red]"
+        impact = f"[yellow]{r['ram_mb']:.1f} MB[/yellow]" if r["success"] else f"[dim]{r.get('reason', '')}[/dim]"
+        summary_table.add_row(status, escape(r['name']), impact)
 
+    console.print("\n  [bold]Cleaning Results:[/bold]")
+    console.print(summary_table)
+
+    console.print(
+        f"\n  [bold]Final Summary:[/bold] "
+        f"[green]{len(killed)} killed[/green], "
+        f"[dim]{len(skipped)} skipped[/dim], "
+        f"~[yellow]{freed:.0f} MB freed[/yellow]"
+    )
+
+    if ram_before and ram_after:
+        render_ram_bar(ram_before, label="Before")
+        render_ram_bar(ram_after,  label="After ")
+
+
+def render_help():
+    """Prints the Help screen."""
     console.print()
-    console.print(Panel(
-        "\n".join(lines),
-        title="[bold]Summary[/bold]",
-        box=box.ROUNDED,
-        padding=(0, 2)
-    ))
-    console.print()
+    console.rule("[bold cyan]RamKleener — How It Works[/bold cyan]")
+    console.print("""
+  RamKleener scans your running processes against two tiers:
 
+  [bold green]PROTECTED[/bold green]    — System-critical processes. Locked forever.
+  [bold yellow]SAFE_TO_KILL[/bold yellow] — Known background bloat. These get terminated.
 
-# ── Menu ──────────────────────────────────────────────────────
+  Unknown processes are [bold]always skipped[/bold] — Safety by default.
 
-def show_menu() -> None:
-    console.print(Panel(
-        "[white]1.[/white]  Scan processes\n"
-        "[white]2.[/white]  Clean RAM  [dim](kill bloat + clear temp)[/dim]\n"
-        "[white]3.[/white]  Full clean [dim](scan + kill + show RAM after)[/dim]\n"
-        "[white]4.[/white]  Help\n"
-        "[white]5.[/white]  About\n"
-        "[dim]0.  Exit[/dim]",
-        box=box.SIMPLE,
-        padding=(0, 2)
-    ))
-
-
-def show_help() -> None:
-    console.print(Panel(
-        "[dim]RamKleener scans for memory-bloating processes\n"
-        "and kills them safely using a 3-tier protection model.[/dim]\n\n"
-        "[red]Tier 1 — NEVER_KILL_CORE   :[/red] locked forever (OS critical)\n"
-        "[yellow]Tier 2 — NEVER_KILL_DEFAULT:[/yellow] protected by default\n"
-        "[green]Tier 3 — SAFE_TO_KILL      :[/green] known bloat, killed if found\n\n"
-        "[dim]Run as Admin for best results.[/dim]",
-        title="Help",
-        box=box.ROUNDED,
-        padding=(0, 2)
-    ))
+  [bold cyan]Menu Options[/bold cyan]
+  ─────────────────────────────────────────────────
+  1. Scan             Show all running bloat processes.
+  2. Kill all         Kill everything found in one shot.
+  3. Kill one by one  Step through each process group — y/n/q.
+  4. Help             This screen.
+  5. About            Version and author info.
+  0. Exit             Quit RamKleener.
+    """)
     console.print()
 
+def render_about():
+    """Prints the About screen."""
+    console.print()
+    console.rule("[bold cyan]About RamKleener[/bold cyan]")
+    console.print("""
+  [bold white]RamKleener[/bold white] v0.1.0
+  A safe, minimal Python CLI tool for killing memory-bloating background processes.
 
-def show_about() -> None:
-    console.print(Panel(
-        "[white]RamKleener v2.0[/white]\n"
-        "[dim]Built by Pushkar\n"
-        "Phase 1: PowerShell  |  Phase 2: Python\n"
-        "github.com/pushkarthisside/RamKleener[/dim]",
-        box=box.ROUNDED,
-        padding=(0, 2)
-    ))
+  [bold cyan]Author[/bold cyan]    Pushkar
+  [bold cyan]GitHub[/bold cyan]    https://github.com/pushkar/ramkleener
+  [bold cyan]Stack[/bold cyan]     Python 3 · psutil · rich
+
+  No admin required. No system files touched. Safe by default.
+    """)
     console.print()

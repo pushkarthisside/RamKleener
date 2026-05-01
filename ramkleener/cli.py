@@ -1,187 +1,144 @@
 # ============================================================
-#  cli.py — RamKleener v2.0
-#  Entry point, menu loop, admin check, flow controller.
+#  cli.py — RamKleener Entry Point & Menu Loop
+#  v1.3 Meta: Final logic integration.
+#  Ties all modules together and manages the user flow.
 # ============================================================
 
-import sys
-import os
-import platform
-from rich.console import Console
-
 from ramkleener.config import load_config
-from ramkleener.cleaner import run_clean
+from ramkleener.scanner import scan_processes, get_system_ram
+from ramkleener.cleaner import kill_all, kill_selective, group_by_name
 from ramkleener.display import (
-    show_header,
-    show_menu,
-    show_help,
-    show_about,
-    show_ram_bar,
-    show_bloat_table,
-    show_clean_summary,
-    run_scan_with_progress
+    console,
+    render_ram_bar,
+    render_scan_table,
+    render_grouped_table,
+    render_kill_summary,
+    render_help,
+    render_about,
 )
 
-console = Console()
+MENU = """
+  ┌─────────────────────────────┐
+  │      R A M K L E E N E R    │
+  ├─────────────────────────────┤
+  │  1. Scan                    │
+  │  2. Kill all                │
+  │  3. Kill one by one         │
+  │  4. Help                    │
+  │  5. About                   │
+  │  0. Exit                    │
+  └─────────────────────────────┘
+"""
 
-
-# ── Admin Check ───────────────────────────────────────────────
-
-def is_admin() -> bool:
+def _require_scan(config):
     """
-    Returns True if running with admin/root privileges.
+    Standardizes the Scan-and-Show flow.
+    Returns (flagged, ram_stats) for use in before/after summaries.
     """
-    try:
-        if platform.system() == "Windows":
-            import ctypes
-            return bool(ctypes.windll.shell32.IsUserAnAdmin())
-        else:
-            return os.geteuid() == 0
-    except Exception:
-        return False
+    ram_stats = get_system_ram()
+    render_ram_bar(ram_stats)
+
+    flagged = scan_processes(config)
+    render_scan_table(flagged)
+
+    return flagged, ram_stats
 
 
-# ── Confirmation Prompt ───────────────────────────────────────
-
-def confirm_clean(bloat_list: list[dict]) -> bool:
-    """
-    Shows estimated impact and asks Y/N.
-    """
-    total_mb    = round(sum(p["mem_mb"] for p in bloat_list), 1)
-    proc_count  = len(bloat_list)
-
-    while True:
-        console.print(
-            f"\n  [yellow]Proceed with cleaning "
-            f"[white]{proc_count}[/white] process(es) "
-            f"(~[white]{total_mb} MB[/white])? "
-            f"([white]y[/white]/[white]n[/white]): [/yellow]",
-            end=""
-        )
-        choice = input().strip().lower()
-
-        if choice == 'y':
-            return True
-        elif choice == 'n':
-            console.print("  [dim]Cancelled.[/dim]\n")
-            return False
-        else:
-            console.print("  [red]Invalid input. Enter y or n.[/red]")
-
-
-# ── Post-Clean Pause ──────────────────────────────────────────
-
-def pause() -> None:
-    console.print("\n  [dim]Press Enter to return to menu...[/dim]", end="")
+def _pause():
+    """Prevents the menu from immediately clearing/scrolling results."""
+    console.print("\n  [dim]Press Enter to return to menu...[/dim]")
     input()
 
 
-# ── Main ──────────────────────────────────────────────────────
+def handle_scan(config):
+    """Option 1: Scan and display only."""
+    _require_scan(config)
+    _pause()
 
-def main() -> None:
-    try:
-        admin       = is_admin()
-        config      = load_config()
-        last_scan   = None  # stores last scan result for reuse
 
-        # One-time header
-        show_header(admin)
+def handle_kill_all(config):
+    """Option 2: Scan then kill all with before/after RAM stats."""
+    flagged, ram_before = _require_scan(config)
 
-        while True:
-            show_menu()
+    if not flagged:
+        _pause()
+        return
 
-            console.print("  [cyan]> [/cyan]", end="")
+    # Trigger the bulk kill engine
+    results = kill_all(flagged)
+
+    if results:
+        ram_after = get_system_ram()
+        render_kill_summary(results, ram_before=ram_before, ram_after=ram_after)
+        _pause()
+
+
+def handle_kill_selective(config):
+    """Option 3: Grouped scan and step-through killing."""
+    flagged, ram_before = _require_scan(config)
+
+    if not flagged:
+        _pause()
+        return
+
+    # Show the user what they are about to step through
+    groups = group_by_name(flagged)
+    render_grouped_table(groups)
+
+    # Trigger the interactive kill engine
+    # kill_selective returns (results, groups)
+    results, _ = kill_selective(flagged)
+
+    if results:
+        ram_after = get_system_ram()
+        render_kill_summary(results, ram_before=ram_before, ram_after=ram_after)
+        _pause()
+
+
+def main():
+    """
+    Main entry point. Loads config once per loop to allow
+    live edits to config.json without restarting the tool.
+    """
+    console.print("\n  [bold cyan]RamKleener[/bold cyan] — v1.3 starting up...\n")
+
+    while True:
+        # LIVE RELOAD: Picks up changes to config.json immediately
+        config = load_config()
+
+        console.print(MENU, style="cyan")
+        console.print("  Choice: ", end="", style="bold white")
+
+        try:
             choice = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n\n  [dim]Interrupted. Exiting.[/dim]\n")
+            break
 
-            # ── Option 1: Scan ────────────────────────────────
-            if choice == "1":
-                last_scan, metadata = run_scan_with_progress(config)
-                show_bloat_table(last_scan, metadata)
+        if choice == "1":
+            handle_scan(config)
 
-            # ── Option 2: Clean ───────────────────────────────
-            elif choice == "2":
-                if not last_scan:
-                    console.print("  [dim]No scan yet — running scan first...[/dim]")
-                    last_scan, metadata = run_scan_with_progress(config)
-                    show_bloat_table(last_scan, metadata)
+        elif choice == "2":
+            handle_kill_all(config)
 
-                if not last_scan:
-                    console.print("  [green]Nothing to clean.[/green]\n")
-                    continue
+        elif choice == "3":
+            handle_kill_selective(config)
 
-                if confirm_clean(last_scan):
-                    summary = run_clean(last_scan, full_clean=False)
-                    show_clean_summary(
-                        killed        = summary["killed"],
-                        already_gone  = summary["already_gone"],
-                        denied        = summary["denied"],
-                        other_fail    = summary["other_fail"],
-                        est_impact_mb = summary["est_impact_mb"],
-                        temp_deleted  = summary["temp_files"],
-                        temp_mb       = summary["temp_mb"]
-                    )
-                    show_ram_bar()
-                    last_scan = None
-                    pause()
+        elif choice == "4":
+            render_help()
+            _pause()
 
-            # ── Option 3: Full Clean ──────────────────────────
-            elif choice == "3":
-                last_scan, metadata = run_scan_with_progress(config)
-                show_bloat_table(last_scan, metadata)
+        elif choice == "5":
+            render_about()
+            _pause()
 
-                if not last_scan:
-                    console.print("  [green]No bloat processes found.[/green]\n")
-                    console.print("  [dim]Running temp cleanup & standby flush...[/dim]")
-                    
-                    summary = run_clean([], full_clean=True)
-                    show_clean_summary(
-                        killed        = summary["killed"],
-                        already_gone  = summary["already_gone"],
-                        denied        = summary["denied"],
-                        other_fail    = summary["other_fail"],
-                        est_impact_mb = summary["est_impact_mb"],
-                        temp_deleted  = summary["temp_files"],
-                        temp_mb       = summary["temp_mb"]
-                    )
-                    show_ram_bar()
-                    pause()
-                    continue
+        elif choice == "0":
+            console.print("\n  [dim]Bye.[/dim]\n")
+            break
 
-                if confirm_clean(last_scan):
-                    summary = run_clean(last_scan, full_clean=True)
-                    show_clean_summary(
-                        killed        = summary["killed"],
-                        already_gone  = summary["already_gone"],
-                        denied        = summary["denied"],
-                        other_fail    = summary["other_fail"],
-                        est_impact_mb = summary["est_impact_mb"],
-                        temp_deleted  = summary["temp_files"],
-                        temp_mb       = summary["temp_mb"]
-                    )
-                    show_ram_bar()
-                    last_scan = None
-                    pause()
-
-            # ── Option 4: Help ────────────────────────────────
-            elif choice == "4":
-                show_help()
-
-            # ── Option 5: About ───────────────────────────────
-            elif choice == "5":
-                show_about()
-
-            # ── Option 0: Exit ────────────────────────────────
-            elif choice == "0":
-                console.print("\n  [dim]Bye.[/dim]\n")
-                sys.exit(0)
-
-            # ── Invalid input ─────────────────────────────────
-            else:
-                console.print("  [red]Invalid option. Enter 0-5.[/red]\n")
-
-    except KeyboardInterrupt:
-        console.print("\n\n  [dim]Interrupted. Bye.[/dim]\n")
-        sys.exit(0)
+        else:
+            console.print("\n  [red]Invalid choice.[/red] Enter 0–5.\n")
 
 
 if __name__ == "__main__":
-    main() 
+    main()

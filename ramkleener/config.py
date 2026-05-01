@@ -1,96 +1,104 @@
+# ============================================================
+#  config.py — RamKleener Configuration Loader & Validator
+#  v1.3 Safety Architecture: PROTECTED wins all conflicts.
+# ============================================================
+
 import json
 import os
 from pathlib import Path
 
-from ramkleener.lists import NEVER_KILL_DEFAULT, SAFE_TO_KILL
+# Importing the hardcoded sets from lists.py
+from ramkleener.lists import PROTECTED, SAFE_TO_KILL
 
-# Config loader and helper utilities for ramkleener.
-# Default values used when config file is missing or invalid.
-# ── Default config values ────────────────────────────────────
+CONFIG_DIR = Path.home() / ".ramkleener"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
 DEFAULT_CONFIG = {
     "user_protected": [],
     "user_kill_list": [],
-    "threshold_mb": 100
+    "threshold_mb": 50
 }
 
-CONFIG_DIR  = Path.home() / ".ramkleener"
-CONFIG_FILE = CONFIG_DIR / "config.json"
+MIN_THRESHOLD_MB = 10
 
 
-def load_config() -> dict:
-    """
-    Reads config.json if it exists.
-    If missing, corrupted, or wrong type, returns DEFAULT_CONFIG silently.
-    """
+def ensure_config_exists():
+    """Checks for config directory/file; creates defaults if missing."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not CONFIG_FILE.exists():
-        return DEFAULT_CONFIG.copy()
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_CONFIG, f, indent=4)
+        except OSError as e:
+            print(f"[config] ERROR: Could not create config file: {e}")
 
-    try:
+
+def load_config():
+    """
+    Reads config.json and enforces v1.3 Meta rules:
+    1. Case-insensitivity and .exe normalization.
+    2. Conflict check: PROTECTED takes priority over Kill List.
+    3. Threshold clamping: Minimum 10 MB.
+    """
+    ensure_config_exists()
+
+    # Default fallback if file is unreadable
+    raw = DEFAULT_CONFIG.copy()
+
+    if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            try:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    raw = data
+            except json.JSONDecodeError:
+                print("[config] WARNING: config.json is corrupted. Using defaults.")
 
-        # FIX 1: Ensure data is actually a dictionary
-        if not isinstance(data, dict):
-            return DEFAULT_CONFIG.copy()
+    # 1. Process User Protected List
+    user_protected = set()
+    for name in raw.get("user_protected", []):
+        # Cast to string to prevent crashes on non-string JSON values
+        cleaned = str(name).lower().strip().removesuffix(".exe")
+        user_protected.add(cleaned)
 
-        # Fill in any missing keys with defaults
-        for key, value in DEFAULT_CONFIG.items():
-            if key not in data:
-                data[key] = value
+    # 2. Process User Kill List with Conflict Validation
+    # Combined protection = Hardcoded + User Overrides
+    combined_protected = PROTECTED | user_protected
+    user_kill_list = set()
 
-        return data
-
-    except (json.JSONDecodeError, OSError):
-        return DEFAULT_CONFIG.copy()
-
-
-def save_config(config: dict) -> bool:
-    """
-    Writes config to ~/.ramkleener/config.json.
-    Creates the directory if it doesn't exist.
-    """
-    try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-        return True
-
-    except OSError:
-        return False
-
-
-def get_protected_set(config: dict) -> set:
-    """
-    Returns NEVER_KILL_DEFAULT + valid user_protected entries.
-    """
-    # Merge built-in protected names with user-provided overrides.
-    raw_list = config.get("user_protected", [])
-    if not isinstance(raw_list, list):
-        raw_list = []
+    for name in raw.get("user_kill_list", []):
+        cleaned = str(name).lower().strip().removesuffix(".exe")
         
-    user = {str(name).lower() for name in raw_list}
-    return NEVER_KILL_DEFAULT | user
+        # CORE RULE: If it's protected, it CANNOT be in the kill list
+        if cleaned in combined_protected:
+            print(f"[config] SAFETY TRIGGER: '{cleaned}' is PROTECTED. Ignoring kill request.")
+        else:
+            user_kill_list.add(cleaned)
 
-
-def get_kill_set(config: dict) -> set:
-    """
-    Returns SAFE_TO_KILL + valid user_kill_list entries.
-    """
-    # Include extra kill candidates from the user's config.
-    raw_list = config.get("user_kill_list", [])
-    if not isinstance(raw_list, list):
-        raw_list = []
-        
-    user = {str(name).lower() for name in raw_list}
-    return SAFE_TO_KILL | user
-
-
-def get_threshold(config: dict) -> float:
-    """
-    Returns threshold_mb from config.
-    Falls back to default if missing or invalid.
-    """
+    # 3. Threshold Clamping (v1.3 Meta: Minimum 10MB)
+    raw_threshold = raw.get("threshold_mb", DEFAULT_CONFIG["threshold_mb"])
+    
     try:
-        return float(config.get("threshold_mb", DEFAULT_CONFIG["threshold_mb"]))
-    except (TypeError, ValueError):
-        return float(DEFAULT_CONFIG["threshold_mb"])
+        threshold_mb = int(raw_threshold)
+        if threshold_mb < MIN_THRESHOLD_MB:
+            # We don't print a warning here to keep the UI clean, just silent clamp
+            threshold_mb = MIN_THRESHOLD_MB
+    except (ValueError, TypeError):
+        threshold_mb = DEFAULT_CONFIG["threshold_mb"]
+
+    return {
+        "user_protected": user_protected,
+        "user_kill_list": user_kill_list,
+        "threshold_mb": threshold_mb
+    }
+
+
+def get_effective_lists(config):
+    """
+    Merges hardcoded lists with the validated user config.
+    Used by scanner.py to decide what to flag and what to ignore.
+    """
+    effective_protected = PROTECTED | config["user_protected"]
+    effective_kill_list = SAFE_TO_KILL | config["user_kill_list"]
+    
+    return effective_protected, effective_kill_list
