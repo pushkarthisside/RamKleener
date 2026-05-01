@@ -1,21 +1,20 @@
 # ============================================================
 #  display.py — RamKleener Terminal UI
-#  Handles all rich output: RAM bar, process table, results.
+#  v1.3 Meta: Optimized for performance and terminal aesthetic.
+#  Uses custom block-bars and simplified summary logic.
 # ============================================================
 
 from rich.console import Console
 from rich.table import Table
-from rich.progress import BarColumn, Progress, TextColumn
 from rich.markup import escape  # CRITICAL: Prevents names with [brackets] from crashing UI
 from rich import box
 
 console = Console()
 
-
-def render_ram_bar(ram_stats, label=None):
+def render_ram_bar(ram_stats):
     """
-    Renders a color-coded RAM usage bar.
-    Green < 60%, Yellow 60-80%, Red > 80%.
+    Renders a custom block-style RAM usage bar [████░░░].
+    Colors: Green < 60%, Yellow 60-80%, Red > 80%.
     """
     percent   = ram_stats["percent_used"]
     used_gb   = ram_stats["used_mb"]  / 1024
@@ -28,24 +27,17 @@ def render_ram_bar(ram_stats, label=None):
     else:
         color = "red"
 
-    prefix = f"  [bold]{label}[/bold]  " if label else "  "
+    # Custom ASCII Bar Logic
+    bar_width = 30
+    filled = int(percent / 100 * bar_width)
+    empty  = bar_width - filled
+    bar    = "█" * filled + "░" * empty
 
     console.print()
     console.print(
-        f"{prefix}[bold]System RAM[/bold]  "
-        f"[{color}]{used_gb:.2f} GB used / {total_gb:.2f} GB total "
-        f"({percent:.1f}%)[/{color}]"
+        f"  RAM  [[{color}]{bar}[/{color}]]  "
+        f"{percent:.1f}%   {used_gb:.1f} / {total_gb:.1f} GB"
     )
-
-    with Progress(
-        TextColumn("  "),
-        BarColumn(bar_width=50, complete_style=color, finished_style=color),
-        console=console,
-        transient=False,
-    ) as progress:
-        task = progress.add_task("", total=100)
-        progress.update(task, completed=percent)
-
     console.print()
 
 
@@ -72,7 +64,7 @@ def render_scan_table(flagged):
         table.add_row(
             str(i),
             str(proc["pid"]),
-            escape(proc["name"]),  # Safety first
+            escape(proc["name"]),
             f"{proc['ram_mb']:.1f} MB"
         )
 
@@ -111,8 +103,11 @@ def render_grouped_table(groups):
     console.print()
 
 
-def render_kill_summary(results, ram_before=None, ram_after=None):
-    """Renders summary with a borderless table for perfect alignment."""
+def render_kill_summary(results, ram_after=None):
+    """
+    Renders summary with a borderless table.
+    Only displays the 'After' RAM status for a cleaner look.
+    """
     if not results:
         console.print("  [dim]Nothing to summarize.[/dim]\n")
         return
@@ -141,9 +136,9 @@ def render_kill_summary(results, ram_before=None, ram_after=None):
         f"~[yellow]{freed:.0f} MB freed[/yellow]"
     )
 
-    if ram_before and ram_after:
-        render_ram_bar(ram_before, label="Before")
-        render_ram_bar(ram_after,  label="After ")
+    if ram_after:
+        console.print("  [dim]RAM after cleaning:[/dim]")
+        render_ram_bar(ram_after)
 
 
 def render_help():
@@ -162,25 +157,24 @@ def render_help():
   ─────────────────────────────────────────────────
   1. Scan             Show all running bloat processes.
   2. Kill all         Kill everything found in one shot.
-  3. Kill one by one  Step through each process group — y/n/q.
+  3. Kill one by one  Step through each group — [b]y[/b]=kill, [b]n[/b]=skip, [b]q[/b]=quit early.
   4. Help             This screen.
   5. About            Version and author info.
   0. Exit             Quit RamKleener.
     """)
     console.print()
 
+
 def render_about():
     """Prints the About screen."""
     console.print()
     console.rule("[bold cyan]About RamKleener[/bold cyan]")
     console.print("""
-  [bold white]RamKleener[/bold white] v0.1.0
+  [bold white]RamKleener[/bold white] v1.3
   A safe, minimal Python CLI tool for killing memory-bloating background processes.
 
   [bold cyan]Author[/bold cyan]    Pushkar :3
   [bold cyan]GitHub[/bold cyan]    https://github.com/pushkarthisside/RamKleener
   [bold cyan]Stack[/bold cyan]     Python 3 · psutil · rich
-
-  No admin required. No system files touched. Safe by default.
     """)
     console.print()
