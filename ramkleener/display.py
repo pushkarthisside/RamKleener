@@ -177,8 +177,8 @@ def render_about():
   [bold white]RamKleener[/bold white] v0.1.0
   A safe, minimal Python CLI tool for killing memory-bloating background processes.
 
-  [bold cyan]Author[/bold cyan]    Pushkar
-  [bold cyan]GitHub[/bold cyan]    https://github.com/pushkar/ramkleener
+  [bold cyan]Author[/bold cyan]    Pushkar :3
+  [bold cyan]GitHub[/bold cyan]    https://github.com/pushkarthisside/RamKleener
   [bold cyan]Stack[/bold cyan]     Python 3 · psutil · rich
 
   No admin required. No system files touched. Safe by default.
