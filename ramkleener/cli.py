@@ -69,7 +69,7 @@ def handle_kill_all(config):
 
     if results:
         ram_after = get_system_ram()
-        render_kill_summary(results, ram_before=ram_before, ram_after=ram_after)
+        render_kill_summary(results, ram_after=ram_after)
         _pause()
 
 
@@ -91,7 +91,7 @@ def handle_kill_selective(config):
 
     if results:
         ram_after = get_system_ram()
-        render_kill_summary(results, ram_before=ram_before, ram_after=ram_after)
+        render_kill_summary(results, ram_after=ram_after)
         _pause()
 
 
