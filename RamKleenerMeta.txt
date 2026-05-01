@@ -1,58 +1,78 @@
-RAMKLEENER — MASTER CONTEXT & META v2.0
+RAMKLEENER — MASTER CONTEXT & META v2.1
 
-A pip-installable Python CLI tool that scans Windows/Mac/Linux for memory-bloating
-background processes and kills them safely using a tiered protection model.
+A pip-installable Python CLI tool that scans system processes across Windows/Mac/Linux,
+identifies memory-heavy background tasks, and terminates them safely using a tiered protection model.
 
 ONE-LINER
-"Scans system processes, filters using a safe tiered model, and terminates known
-memory-heavy background tasks with user confirmation — all from the terminal."
+"Scans system processes, filters using a strict safety model, and terminates known
+memory-heavy background tasks with user confirmation — directly from the terminal."
 
 STATUS
 Phase 1: ✅ Complete (PowerShell — /Phase1/RamKleener.ps1)
 Phase 2: ✅ Complete (Python package — pip install -e .)
-Phase 3: 🔄 Planned -- In future (fixes, README, PyInstaller .exe)
 
 STACK
-psutil, rich, platform, ctypes, json, PyInstaller
+psutil, rich, platform, json
 
 FILE STRUCTURE
 ramkleener/
 ├── Phase1/RamKleener.ps1
 ├── ramkleener/
-│   ├── __init__.py
-│   ├── cli.py        — entry point, menu loop, admin check
-│   ├── scanner.py    — psutil scan, three-tier filter, metadata
-│   ├── cleaner.py    — kill engine, temp cleanup, standby flush
-│   ├── lists.py      — three protection lists (sets)
-│   ├── config.py     — load/save ~/.ramkleener/config.json
-│   └── display.py    — rich UI, RAM bar, progress, table, summary
+│   ├── **init**.py
+│   ├── lists.py      — PROTECTED + SAFE_TO_KILL sets
+│   ├── config.py     — load/validate ~/.ramkleener/config.json
+│   ├── scanner.py    — process scan, tiered filtering, metadata
+│   ├── display.py    — CLI UI, RAM bar, tables, summaries
+│   ├── cleaner.py    — execution engine, grouped termination
+│   └── cli.py        — entry point, menu loop
 ├── requirements.txt
 ├── setup.py
 └── README.md
 
 SAFETY MODEL
-NEVER_KILL_CORE     — locked forever, OS critical
-NEVER_KILL_DEFAULT  — protected by default, user can override via config
-SAFE_TO_KILL        — known bloat, user can extend via config
-UNKNOWN             — always skipped (safe by default)
+PROTECTED       — hardcoded, locked forever, OS + critical services
+user can extend via user_protected in config
+
+SAFE_TO_KILL    — known non-critical background processes
+user can extend via user_kill_list in config
+
+UNKNOWN         — always skipped (safe by default)
 
 CONFIG — ~/.ramkleener/config.json
 {
-  "user_protected": [],
-  "user_kill_list": [],
-  "threshold_mb": 100
+"user_protected": [],
+"user_kill_list": [],
+"threshold_mb": 50
 }
 
-KNOWN ISSUES (fix in Phase 3)
-- browsers in SAFE_TO_KILL need rethinking (foreground vs background)
-- .exe suffix stripping added in scanner (Windows psutil returns name.exe)
-- standby flush requires Admin
-- lists need tuning per real machine data
+MENU
+
+1. Scan            — show flagged processes + RAM usage
+2. Kill all        — terminate all flagged processes with summary
+3. Kill one by one — grouped flow (y=kill n=skip q=quit)
+4. Help            — usage explanation
+5. About           — version, author, GitHub
+6. Exit
+
+KILL MODES
+
+Kill all:
+Found X process(es). Kill all? [y/n]
+✓ Killed  chrome        340.0 MB
+✗ Skipped OneDrive      already exited
+Final Summary: 2 killed, 1 skipped, ~340 MB freed
+RAM  [████████████████████░░░░░░░░░░]  85.8%   6.3 / 7.3 GB
+
+Kill one by one (grouped):
+[1/4] chrome      8 PIDs   1.2 GB total — kill? [y/n/q]
+[2/4] msedge      3 PIDs   340.0 MB total — kill? [y/n/q]
+Final Summary: 1 killed, 1 skipped, ~1.2 GB freed
 
 KEY RULES
-- never kill unknown processes
-- scan → display → confirm → clean (always in this order)
-- threshold filtering is mandatory
-- errors must never crash the program
-- cleaner executes, never decides
 
+* never terminate unknown processes
+* scan → display → confirm → execute (strict order)
+* threshold filtering is mandatory (min 10 MB, default 50 MB)
+* errors must never crash the program
+* cleaner executes, never decides
+* PROTECTED overrides all conflicts (no config override possible)
