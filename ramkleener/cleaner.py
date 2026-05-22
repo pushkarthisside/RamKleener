@@ -1,18 +1,15 @@
 # ============================================================
-#  cleaner.py — RamKleener Kill Logic
-#  v1.3 Meta: Two modes (Bulk & Selective), PID-recycling protection,
-#  and group-based termination for multi-process apps (Browsers).
+#  cleaner.py — RamKleener Kill Logic (v2.3 UI Uniformity)
 # ============================================================
 
 import psutil
 from collections import defaultdict
+from rich.console import Console
 
+console = Console()
 
 def _kill_process(proc):
-    """
-    Attempts to terminate a single process safely.
-    Tries terminate() first, then kill() if it lingers.
-    """
+    """Attempts to terminate a single process safely."""
     try:
         proc.terminate()
         proc.wait(timeout=3)
@@ -33,7 +30,6 @@ def _kill_process(proc):
 
 
 def _build_result(name, ram_mb, success, reason):
-    """Builds a standardized result dict for display.py summary."""
     return {
         "name":    name,
         "ram_mb":  ram_mb,
@@ -43,10 +39,7 @@ def _build_result(name, ram_mb, success, reason):
 
 
 def group_by_name(flagged):
-    """
-    Groups individual PIDs by their normalized process name.
-    Ensures users make one decision per app (e.g., 'Chrome') rather than per PID.
-    """
+    """Groups individual PIDs by their normalized process name."""
     groups = defaultdict(lambda: {
         "name":   "",
         "normal": "",
@@ -63,37 +56,34 @@ def group_by_name(flagged):
         groups[key]["ram_mb"] += proc["ram_mb"]
         groups[key]["count"]  += 1
 
-    # Return as a list sorted by total RAM impact (heaviest groups first)
     result = list(groups.values())
     result.sort(key=lambda g: g["ram_mb"], reverse=True)
     return result
 
 
 def kill_all(flagged):
-    """
-    Nuclear option: Kills every process found in the scan.
-    """
+    """Nuclear option: Kills every process found in the scan with clean UI."""
     if not flagged:
         return []
 
-    print(f"\n  Found {len(flagged)} process(es). Kill all? [y/n] ", end="")
-    confirm = input().strip().lower()
+    console.print(f"\n  Found {len(flagged)} process(es). Kill all? [bold cyan][y/n][/bold cyan]: ", end="")
+    try:
+        confirm = input().strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        return []
 
     if confirm != "y":
-        print("  Cancelled.\n")
+        console.print("  [yellow]Cancelled.[/yellow]\n")
         return []
 
     results = []
     for proc_dict in flagged:
         try:
             proc = psutil.Process(proc_dict["pid"])
-            
-            # PID Recycling Protection: Verify name hasn't changed since scan
             if proc.name() != proc_dict["name"]:
                 success, reason = False, "PID recycled (safe skip)"
             else:
                 success, reason = _kill_process(proc)
-
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             success, reason = False, "inaccessible/exited"
         except Exception as e:
@@ -106,19 +96,18 @@ def kill_all(flagged):
     return results
 
 
-def kill_selective(flagged):
+def kill_selective(groups):
     """
-    Interactive mode: Steps through grouped processes.
-    One decision per app name.
+    Interactive mode: Steps through pre-computed grouped processes.
+    No recomputation overhead.
     """
-    if not flagged:
-        return [], []
+    if not groups:
+        return []
 
-    groups = group_by_name(flagged)
     results = []
     total = len(groups)
 
-    print()
+    console.print()
     for i, group in enumerate(groups, start=1):
         name   = group["name"]
         ram_mb = group["ram_mb"]
@@ -126,22 +115,24 @@ def kill_selective(flagged):
         pids   = group["pids"]
 
         count_str = f"{count} PID{'s' if count > 1 else ''}"
-        print(
-            f"  [{i}/{total}] {name:<25} {count_str:<10} "
-            f"{ram_mb:.1f} MB total — kill? [y/n/q] ", end=""
+        console.print(
+            f"  [{i}/{total}] [white]{name:<25}[/white] [cyan]{count_str:<10}[/cyan] "
+            f"[yellow]{ram_mb:.1f} MB total[/yellow] — kill? [bold cyan][y/n/q][/bold cyan]: ", end=""
         )
-        answer = input().strip().lower()
+        try:
+            answer = input().strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            break
 
         if answer == "q":
-            print("  Quitting interactive mode.\n")
+            console.print("  [dim]Quitting interactive mode.[/dim]\n")
             break
 
         if answer != "y":
-            print("  → skipped")
+            console.print("  [dim]→ skipped[/dim]")
             results.append(_build_result(name, ram_mb, False, "skipped by user"))
             continue
 
-        # Kill all PIDs associated with this name
         any_success = False
         last_reason = "killed"
 
@@ -160,16 +151,15 @@ def kill_selective(flagged):
             else:
                 last_reason = reason
 
-        # Group succeeds if at least one PID was killed
         group_success = any_success
         group_reason  = "killed" if any_success else last_reason
 
         if group_success:
-            print("  → ✓ killed")
+            console.print("  [green]→ ✓ killed[/green]")
         else:
-            print(f"  → ✗ {group_reason}")
+            console.print(f"  [red]→ ✗ {group_reason}[/red]")
 
         results.append(_build_result(name, ram_mb, group_success, group_reason))
 
-    print()
-    return results, groups
+    console.print()
+    return results

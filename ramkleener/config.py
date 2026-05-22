@@ -5,6 +5,8 @@
 
 import json
 import os
+import platform
+import subprocess
 from pathlib import Path
 
 # Importing the hardcoded sets from lists.py
@@ -102,3 +104,35 @@ def get_effective_lists(config):
     effective_kill_list = SAFE_TO_KILL | config["user_kill_list"]
     
     return effective_protected, effective_kill_list
+
+def save_config(user_protected, user_kill_list, threshold_mb):
+    """Saves the current configuration states back to the JSON file."""
+    # Convert sets back to sorted lists for clean JSON readability
+    data = {
+        "user_protected": sorted(list(user_protected)),
+        "user_kill_list": sorted(list(user_kill_list)),
+        "threshold_mb": threshold_mb
+    }
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        return True
+    except OSError as e:
+        print(f"[config] ERROR: Could not save config file: {e}")
+        return False
+
+
+def open_config_folder():
+    """Opens the configuration folder natively in the host OS file explorer."""
+    ensure_config_exists()
+    try:
+        if platform.system() == "Windows":
+            os.startfile(CONFIG_DIR)
+        elif platform.system() == "Darwin":  # macOS
+            subprocess.run(["open", str(CONFIG_DIR)], check=True)
+        else:  # Linux
+            subprocess.run(["xdg-open", str(CONFIG_DIR)], check=True)
+        return True
+    except Exception as e:
+        print(f"[config] ERROR: Could not open folder: {e}")
+        return False

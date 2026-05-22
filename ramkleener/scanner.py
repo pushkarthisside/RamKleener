@@ -96,3 +96,53 @@ def get_system_ram():
         "used_mb": round(mem.used / (1024 * 1024), 1),
         "percent_used": mem.percent
     }
+def scan_discovery_processes(config):
+    """
+    Scouts ALL apps over 10MB (Killable, Protected, and Neutral) and tags them.
+    Deduplicates by name so the config menu shows a clean variety of apps.
+    """
+    raw_protected, raw_kill_list = get_effective_lists(config)
+    is_windows = platform.system() == "Windows"
+    
+    eff_protected = {_normalize(p, is_windows) for p in raw_protected}
+    eff_kill_list = {_normalize(k, is_windows) for k in raw_kill_list}
+
+    flagged = []
+    seen_names = set()
+
+    for proc in psutil.process_iter(["pid", "name", "memory_info"]):
+        try:
+            pinfo = proc.info
+            raw_name = pinfo.get("name")
+            mem_info = pinfo.get("memory_info")
+
+            if not raw_name or not mem_info:
+                continue
+
+            normalized = _normalize(raw_name, is_windows)
+            ram_mb = round(mem_info.rss / (1024 * 1024), 1)
+
+            if ram_mb >= 10:
+                # Determine tier for color-coding
+                if normalized in eff_protected:
+                    tier = "protected"
+                elif normalized in eff_kill_list:
+                    tier = "killable"
+                else:
+                    tier = "neutral"
+
+                if normalized not in seen_names:
+                    seen_names.add(normalized)
+                    flagged.append({
+                        "pid": pinfo.get("pid"),
+                        "name": raw_name,
+                        "normal": normalized,
+                        "ram_mb": ram_mb,
+                        "tier": tier
+                    })
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    # Sort by RAM and return top 20 heaviest unique apps
+    flagged.sort(key=lambda p: p["ram_mb"], reverse=True)
+    return flagged[:20]
