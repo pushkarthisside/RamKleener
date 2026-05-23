@@ -11,9 +11,9 @@ RamKleener is a Python CLI utility that scans system processes, filters them usi
 - **Safe by Design** — Uses a strict two-tier safety model so only known, non-critical processes are targeted.
 - **Grouped Process Control** — Apps like Chrome or Edge run multiple processes — RamKleener groups them so you can handle everything in one step.
 - **No Accidental Kills (PID Protection)** — Double-checks each process before terminating to avoid mistakes caused by system PID reuse.
+- **Interactive Customization** — Add your own protected apps or kill targets directly through the built-in terminal UI (no config files required).
 - **Fast Scanning** — Efficient filtering ensures quick results even with hundreds of running processes. *(O(1) Filtering)*
-- **Clean Terminal UI** — Displays RAM usage and results clearly with simple bars and tables.
-- **Customizable** — Add your own protected apps or kill targets through a simple config file.
+- **Clean Terminal UI** — Displays RAM usage and results clearly with simple bars, tables, and color-coded statuses.
 
 ---
 
@@ -33,13 +33,19 @@ If a process appears in both categories: **Protected always wins.**
 
 ## 🚀 Installation
 
+Ensure you have **Python 3** installed on your system.
+
+Open your terminal or command prompt and run:
+
 ```bash
 git clone https://github.com/pushkarthisside/RamKleener.git
 cd RamKleener
-pip install -e .
+pip install .
 ```
 
-Then run it:
+*Note: If you are developing or editing the code yourself, use `pip install -e .` instead.*
+
+Once installed, you can launch the tool from anywhere by simply typing:
 
 ```bash
 ramkleener
@@ -49,67 +55,51 @@ ramkleener
 
 ## 🎮 Usage
 
-```
-1. Scan             — show flagged processes + RAM usage
-2. Kill All         — terminate all flagged processes with summary
-3. Kill One by One  — grouped flow per app (y=kill  n=skip  q=quit)
-4. Help
-5. About
-0. Exit
+When you run RamKleener, you will be greeted with the main menu:
+
+```text
+  1. Scan             — show active bloat apps above your RAM threshold
+  2. Kill all         — instantly terminate all flagged processes
+  3. Kill one by one  — step through groups (y=kill, n=skip, q=quit)
+  4. Customize Lists  — interactive UI to manage your Safe and Clean apps
+  5. Help             — view color legends and tool documentation
+  6. About            — version and author info
+  0. Exit             — exits the main menu
 ```
 
-**Kill One by One** is recommended — it groups processes by app so you decide per application, not per PID.
+**Kill one by one** is recommended — it groups processes by app so you decide per application (e.g., all of Chrome at once), not per individual PID.
 
 ---
 
-## 🧩 Customize
+## 🧩 Customize (No Code Required)
 
-RamKleener uses a config file to know what to kill and what to protect on your specific machine.
+RamKleener features a built-in interactive customization menu so you never have to hunt down hidden system folders or edit raw JSON files.
 
-**Where is it?**
+From the main menu, select **`4. Customize Lists`**.
 
-```
-Windows:   C:\Users\YourName\.ramkleener\config.json
-Mac/Linux: /home/yourname/.ramkleener/config.json
-```
+### How it works
 
-This file is created automatically the first time you run RamKleener. Open it with any text editor (Notepad works fine).
+When you enter the Customize menu, RamKleener automatically scouts your PC for the heaviest running apps.
 
----
+- **Smart Toggle:** To manage an app, simply type its `#` number from the table (or type an app name manually like `spotify`).
+- If the app is **not** on your list, it gets **added**.
+- If the app is **already** on your list, it gets **removed**.
 
-**How do I know what to add?**
+### The Color Legend
 
-On Windows — open Task Manager → go to the **Details** tab → look for processes using high memory that you don't need running in the background (updaters, sync tools, crash handlers).
+RamKleener uses context-aware colors that change depending on which menu you are managing:
 
-Note the name in the **Name** column (e.g. `Spotify.exe`). Remove the `.exe` part and add it lowercase.
+#### 📂 Option 1: Clean Apps Menu
+- 🟢 **Green (✓ Clean Target):** The app is on your kill list and will be closed if it hogs RAM.
+- 🔴 **Red (🔒 Protected):** Critical OS process or blocked by your Safe list. Cannot be added.
+- 🟡 **Yellow (❓ Neutral):** Ignored by RamKleener. Type its number/name to add it to the clean list.
 
----
+#### 🛡️ Option 2: Safe Apps Menu
+- 🟢 **Green (✓ Safe/Locked):** Whitelisted app. RamKleener is locked out and the app/process will never get terminated.
+- 🔴 **Red (⚠️ Kill Target):** Warning! This app is currently on your kill list.
+- 🟡 **Yellow (❓ Neutral):** Ignored by RamKleener. Type its name to secure it on the safe list.
 
-**Adding a process to kill:**
-
-```json
-{
-  "user_protected": [],
-  "user_kill_list": ["spotify", "discord", "brave"],
-  "threshold_mb": 50
-}
-```
-
-**Protecting something you don't want touched:**
-
-```json
-{
-  "user_protected": ["docker", "my_work_app"],
-  "user_kill_list": [],
-  "threshold_mb": 50
-}
-```
-
-- `user_protected` — RamKleener will never touch these, no matter what
-- `user_kill_list` — RamKleener will target these if they're using enough RAM
-- `threshold_mb` — processes using less RAM than this are ignored entirely (default: 50 MB, minimum: 10 MB)
-
-Not sure what to add? Run option `1. Scan` first — it shows exactly what RamKleener can already see on your machine. Start from there.
+*(Advanced Users: The raw configuration file is still automatically generated and accessible at `~/.ramkleener/config.json` if you prefer manual editing).*
 
 ---
 
@@ -117,7 +107,7 @@ Not sure what to add? Run option `1. Scan` first — it shows exactly what RamKl
 
 I built it because my 8GB RAM laptop was constantly bloated and I couldn't find a tool that was both safe and customizable enough to trust.
 
-RamKleener is the result. It's tuned to my machine, and with a few config edits, it can be tuned to yours too.
+RamKleener is the result. It's tuned to my machine, and with a few clicks in the customization menu, it can be perfectly tuned to yours too.
 
 If you run into any issues — installation, config, or anything else — feel free to [open an issue](https://github.com/pushkarthisside/RamKleener/issues).
 
