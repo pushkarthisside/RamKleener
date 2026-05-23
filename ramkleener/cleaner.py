@@ -66,7 +66,7 @@ def kill_all(flagged):
     if not flagged:
         return []
 
-    console.print(f"\n  Found {len(flagged)} process(es). Kill all? [bold cyan][y/n][/bold cyan]: ", end="")
+    console.print(f"\n  Found {len(flagged)} process(es). Kill all? [bold cyan](y/n)[/bold cyan]: ", end="")
     try:
         confirm = input().strip().lower()
     except (KeyboardInterrupt, EOFError):
@@ -117,7 +117,7 @@ def kill_selective(groups):
         count_str = f"{count} PID{'s' if count > 1 else ''}"
         console.print(
             f"  [{i}/{total}] [white]{name:<25}[/white] [cyan]{count_str:<10}[/cyan] "
-            f"[yellow]{ram_mb:.1f} MB total[/yellow] — kill? [bold cyan][y/n/q][/bold cyan]: ", end=""
+            f"[yellow]{ram_mb:.1f} MB total[/yellow] — kill? [bold cyan](y/n/q)[/bold cyan]: ", end=""
         )
         try:
             answer = input().strip().lower()
