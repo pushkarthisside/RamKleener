@@ -3,6 +3,7 @@
 # ============================================================
 
 from ramkleener.config import load_config, save_config
+from ramkleener.scanner import scan_discovery_processes
 from ramkleener.scanner import scan_processes, get_system_ram, scan_discovery_processes
 from ramkleener.cleaner import kill_all, kill_selective, group_by_name
 from ramkleener.display import (
@@ -110,8 +111,7 @@ def handle_customize():
         # OPTION 1: ADD / REMOVE CLEAN APPS
         # ---------------------------------------------------------
         if choice == "1":
-            console.print("\n  [dim]💡 Tip: Unsure about the colors? Check the 'Help' option in the main menu first![/dim]")
-            console.print("  [dim]Scouting PC...[/dim]")
+            console.print("\n  [dim]Scouting PC...[/dim]")
             flagged = scan_discovery_processes(config)
             
             if config["user_kill_list"]:
@@ -119,12 +119,15 @@ def handle_customize():
                 
             render_discovery_table(flagged, mode="clean")
             
+            # --- THE NEW INLINE LEGEND ---
+            console.print("  [dim]Legend: [green]✓ Clean Target[/green] (Will close) | [red]🔒 Protected[/red] (Cannot close) | [yellow]❓ Neutral[/yellow] (Ignored)[/dim]")
+            console.print("  [dim]For more details, check the 'Help' option in the main menu.[/dim]\n")
+            
             console.print("  [bold cyan]To Add/Remove:[/bold cyan] Type the [cyan]# number[/cyan] or app name (e.g. spotify)")
             console.print("  Your input (or press Enter to cancel): ", end="")
             user_input = input().strip().lower()
             if not user_input: continue
             
-            # Map input to app name and tier
             chosen_app = None
             target_tier = "neutral"
             
@@ -135,14 +138,12 @@ def handle_customize():
                     target_tier = flagged[idx-1]["tier"]
             except ValueError:
                 chosen_app = user_input.removesuffix(".exe")
-                # If typed manually, we must assume neutral unless it's in our lists
                 if chosen_app in config["user_protected"]: target_tier = "protected"
                 elif chosen_app in config["user_kill_list"]: target_tier = "killable"
 
             if not chosen_app:
                 console.print("  [red]Invalid selection.[/red]"); _pause(); continue
 
-            # ENFORCE RULES
             if target_tier == "protected":
                 console.print(f"\n  [red]🛑 SAFETY BLOCK: '{chosen_app}' is a protected app.[/red]")
                 console.print("  You cannot add it to the clean list.")
@@ -164,14 +165,17 @@ def handle_customize():
         # OPTION 2: ADD / REMOVE SAFE APPS
         # ---------------------------------------------------------
         elif choice == "2":
-            console.print("\n  [dim]💡 Tip: Unsure about the colors? Check the 'Help' option in the main menu first![/dim]")
-            console.print("  [dim]Scouting PC...[/dim]")
+            console.print("\n  [dim]Scouting PC...[/dim]")
             flagged = scan_discovery_processes(config)
             
             if config["user_protected"]:
                 console.print(f"  [bold green]Your Custom Safe Apps:[/bold green] {list(config['user_protected'])}\n")
                 
             render_discovery_table(flagged, mode="safe")
+            
+            # --- THE NEW INLINE LEGEND ---
+            console.print("  [dim]Legend: [green]✓ Safe/Locked[/green] (Never closes) | [red]⚠️ Kill Target[/red] (Will close) | [yellow]❓ Neutral[/yellow] (Ignored)[/dim]")
+            console.print("  [dim]For more details, check the 'Help' option in the main menu.[/dim]\n")
             
             console.print("  [bold cyan]To Add/Remove:[/bold cyan] Type the [cyan]# number[/cyan] or app name")
             console.print("  Your input (or press Enter to cancel): ", end="")
@@ -188,7 +192,6 @@ def handle_customize():
 
             if not chosen_app: continue
 
-            # EXTRA CONFIRMATION LAYER
             action = "REMOVE from" if chosen_app in config["user_protected"] else "ADD to"
             console.print(f"\n  Are you sure you want to [bold]{action}[/bold] '{chosen_app}' safe list? (y/n): ", end="")
             confirm = input().strip().lower()
